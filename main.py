@@ -37,7 +37,7 @@ def main():
     indexing_pipeline = combine >> splade.doc_encoder(text_field='text') >> indexer
 
     # Build the index (this may take a while for large datasets)
-    index_ref = indexing_pipeline.index(dataset.get_corpus_iter(), batch_size=128)
+    index_ref = indexing_pipeline.index(dataset.get_corpus_iter(), batch_size=64)
 
 def combine_fields(doc):
     doc['text'] = doc.get('title', '') + ' ' + doc.get('body', '')
