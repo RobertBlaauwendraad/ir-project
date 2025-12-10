@@ -6,8 +6,11 @@ more_itertools
 
 transformers>=4.30.0
 huggingface_hub>=0.14.0
+tokenizers>=0.13.0
 
 git+https://github.com/naver/splade.git
 git+https://github.com/cmacdonald/pyt_splade.git
 
 torch
+pandas-stubs~=2.3.3
+ipykernel>=7.1.0
