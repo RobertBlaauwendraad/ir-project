@@ -32,16 +32,15 @@ def main():
     index_dir = os.path.abspath("./robust04_splade_index")
     indexer = pt.IterDictIndexer(index_dir, pretokenised=True, verbose=True, overwrite=True)
 
+    # Combine title and body fields using vectorized operation
+    combine = pt.apply.text(lambda doc: doc.get('title', '') + ' ' + doc.get('body', ''))
+
     # Create an indexing pipeline: encode documents with SPLADE, then index
-    combine = pt.apply.generic(combine_fields)
     indexing_pipeline = combine >> splade.doc_encoder(text_field='text') >> indexer
 
-    # Build the index (this may take a while for large datasets)
+    # Build the index
     index_ref = indexing_pipeline.index(dataset.get_corpus_iter(), batch_size=64)
 
-def combine_fields(doc):
-    doc['text'] = doc.get('title', '') + ' ' + doc.get('body', '')
-    return doc
 
 if __name__ == "__main__":
     main()
