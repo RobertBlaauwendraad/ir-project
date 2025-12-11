@@ -17,6 +17,8 @@ dependencies = [
     "torch",
     "pandas-stubs~=2.3.3",
     "ipykernel>=7.1.0",
+    "sentencepiece>=0.2.1",
+    "pyterrier-t5>=0.2.1",
 ]
 
 [tool.uv]
