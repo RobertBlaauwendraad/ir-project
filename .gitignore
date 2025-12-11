@@ -300,7 +300,7 @@ pyrightconfig.json
 # End of https://www.toptal.com/developers/gitignore/api/python,pycharm,jupyternotebooks
 
 ### Custom ignores ###
-/msmarco_index
-/msmarco_splade_index
+/robust04_bm25_index
+/robust04_splade_index
 **/copilot.*
 /.junie

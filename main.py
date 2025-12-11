@@ -23,7 +23,10 @@ def main():
     print(f"Using device: {device}")
 
     # Load SPLADE model
-    splade = pyt_splade.Splade(model="naver/splade-cocondenser-ensembledistil", device=device, max_length=256)
+    if device == "mps":
+        splade = pyt_splade.Splade(model="naver/splade-cocondenser-ensembledistil", device=device, max_length=256)
+    else:
+        splade = pyt_splade.Splade(model="C:\splade_model", device=device, max_length=256)
 
     # Load Robust04 dataset
     dataset = pt.get_dataset("irds:disks45/nocr/trec-robust-2004")
