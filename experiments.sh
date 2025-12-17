@@ -2,10 +2,10 @@
 #SBATCH --partition=csedu
 #SBATCH --account=csedui00041
 #SBATCH --gres=gpu:1
-#SBATCH --time=24:00:00
-#SBATCH --mem=32G
-#SBATCH --output=experiments_%j.out
-#SBATCH --error=experiments_%j.err
+##SBATCH --time=24:00:00
+##SBATCH --mem=32G
+#SBATCH --output=logs/experiments_%j.out
+#SBATCH --error=logs/experiments_%j.err
 
 # IR Experiments Runner
 # Usage:
@@ -13,6 +13,9 @@
 #   sbatch experiments.sh 1 2 3             # Run specific experiments
 #   sbatch experiments.sh 1-5               # Run experiment range
 #   sbatch experiments.sh 1-5 10 20         # Run experiments 1-5, 10, and 20
+
+# Create logs directory if it doesn't exist
+mkdir -p logs
 
 # Activate virtual environment if it exists
 if [ -d ".venv" ]; then
