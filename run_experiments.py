@@ -96,12 +96,13 @@ def save_results(results: pd.DataFrame, name: str, output_dir: str, logger: logg
     logger.info(f"Results saved to: {filename}")
 
 
-def setup_environment(logger: logging.Logger, device: str):
+def setup_environment(logger: logging.Logger, device: str, data_dir: str = "./data"):
     """Initialize PyTerrier, models, and indices."""
     global _dataset, _splade, _splade_retr, _bm25_retr
     global _bm25_index_ref, _splade_index_ref, _topics, _qrels
     
     logger.info(f"Using device: {device}")
+    logger.info(f"Data directory: {data_dir}")
     torch.manual_seed(26)
     
     # Initialize SPLADE
@@ -127,9 +128,10 @@ def setup_environment(logger: logging.Logger, device: str):
     logger.info("Loading Robust04 dataset...")
     _dataset = pt.get_dataset("irds:disks45/nocr/trec-robust-2004")
     
-    # Load indices
-    bm25_index_dir = os.path.abspath("./robust04_bm25_index")
-    splade_index_dir = os.path.abspath("./robust04_splade_index")
+    # Load indices from data directory
+    data_dir = os.path.abspath(data_dir)
+    bm25_index_dir = os.path.join(data_dir, "robust04_bm25_index")
+    splade_index_dir = os.path.join(data_dir, "robust04_splade_index")
     
     logger.info("Loading BM25 index...")
     _bm25_index_ref = pt.IndexFactory.of(bm25_index_dir)
@@ -1144,6 +1146,11 @@ Examples:
         choices=["cuda", "mps", "cpu"],
         help="Device to use (default: auto-detect)"
     )
+    parser.add_argument(
+        "--data-dir",
+        default="./data",
+        help="Directory containing indices (default: ./data)"
+    )
     
     args = parser.parse_args()
     
@@ -1163,8 +1170,9 @@ Examples:
     device = args.device or detect_device()
     
     # Setup environment
+    data_dir = os.path.abspath(args.data_dir)
     try:
-        setup_environment(logger, device)
+        setup_environment(logger, device, data_dir)
     except Exception as e:
         logger.error(f"Failed to setup environment: {e}")
         raise

@@ -22,11 +22,14 @@ if [ -d ".venv" ]; then
     source .venv/bin/activate
 fi
 
+# Data directory - uses the symlink to the shared storage
+DATA_DIR="./data"
+
 # Run experiments
 if [ $# -eq 0 ]; then
     # No arguments: run all experiments
-    python run_experiments.py --output-dir ./experiment_results
+    python run_experiments.py --data-dir "$DATA_DIR" --output-dir ./experiment_results
 else
     # Arguments provided: pass them as experiment IDs
-    python run_experiments.py --exp "$@" --output-dir ./experiment_results
+    python run_experiments.py --data-dir "$DATA_DIR" --exp "$@" --output-dir ./experiment_results
 fi
