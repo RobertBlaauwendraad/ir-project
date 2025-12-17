@@ -11,11 +11,18 @@
 # Index Builder for IR Project
 # This script builds the BM25 and SPLADE indices needed for experiments.
 #
+# Supported datasets:
+#   - robust04: TREC Robust 2004 (default)
+#   - owi: OWI (full)
+#   - owi/subsampled: OWI (subsampled)
+#
 # Usage:
-#   sbatch build_indices.sh                    # Build all indices
-#   sbatch build_indices.sh --bm25-only        # Build only BM25 index
-#   sbatch build_indices.sh --splade-only      # Build only SPLADE index
-#   sbatch build_indices.sh --force            # Force rebuild existing indices
+#   sbatch build_indices.sh                        # Build all indices for robust04
+#   sbatch build_indices.sh --dataset owi          # Build indices for OWI dataset
+#   sbatch build_indices.sh --dataset owi/subsampled  # Build indices for OWI subsampled
+#   sbatch build_indices.sh --bm25-only            # Build only BM25 index
+#   sbatch build_indices.sh --splade-only          # Build only SPLADE index
+#   sbatch build_indices.sh --force                # Force rebuild existing indices
 
 # Create logs directory if it doesn't exist
 mkdir -p logs

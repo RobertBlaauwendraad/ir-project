@@ -8,11 +8,18 @@
 #SBATCH --error=logs/run_experiments_%j.err
 
 # IR Experiments Runner
+#
+# Supported datasets:
+#   - robust04: TREC Robust 2004 (default)
+#   - owi: Dutch government web pages (full)
+#   - owi/subsampled: Dutch government web pages (subsampled)
+#
 # Usage:
-#   sbatch experiments.sh                    # Run all experiments
-#   sbatch experiments.sh 1 2 3             # Run specific experiments
-#   sbatch experiments.sh 1-5               # Run experiment range
-#   sbatch experiments.sh 1-5 10 20         # Run experiments 1-5, 10, and 20
+#   sbatch run_experiments.sh                              # Run all experiments on robust04
+#   sbatch run_experiments.sh --dataset owi                # Run all experiments on OWI
+#   sbatch run_experiments.sh --exp 1 2 3                  # Run specific experiments
+#   sbatch run_experiments.sh --exp 1-5                    # Run experiment range
+#   sbatch run_experiments.sh --dataset owi --exp 1-5      # Run experiments 1-5 on OWI
 
 # Create logs directory if it doesn't exist
 mkdir -p logs
@@ -25,11 +32,5 @@ fi
 # Data directory - uses the symlink to the shared storage
 DATA_DIR="./data"
 
-# Run experiments
-if [ $# -eq 0 ]; then
-    # No arguments: run all experiments
-    python run_experiments.py --data-dir "$DATA_DIR" --output-dir ./experiment_results
-else
-    # Arguments provided: pass them as experiment IDs
-    python run_experiments.py --data-dir "$DATA_DIR" --exp "$@" --output-dir ./experiment_results
-fi
+# Run experiments - pass all arguments to Python script
+python run_experiments.py --data-dir "$DATA_DIR" --output-dir ./experiment_results "$@"

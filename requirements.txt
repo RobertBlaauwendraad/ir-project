@@ -3,6 +3,7 @@ ir_datasets
 tqdm
 pandas
 more_itertools
+duckdb
 
 transformers==4.18.0
 huggingface_hub==0.5.1
