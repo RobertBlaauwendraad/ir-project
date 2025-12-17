@@ -251,7 +251,7 @@ celerybeat.pid
 .env
 .venv
 env/
-venv/
+venv
 ENV/
 env.bak/
 venv.bak/
@@ -304,3 +304,10 @@ pyrightconfig.json
 /robust04_splade_index
 **/copilot.*
 /.junie
+*.pyc
+/lightning_logs/
+/logs
+/data
+notebooks/.ipynb_checkpoints
+notebooks/playground.ipynb
+
