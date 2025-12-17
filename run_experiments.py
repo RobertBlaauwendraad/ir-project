@@ -105,9 +105,20 @@ def setup_environment(logger: logging.Logger, device: str):
     torch.manual_seed(26)
     
     # Initialize SPLADE
-    logger.info("Initializing SPLADE model...")
+    # Check for local model path first (for cluster without internet access)
+    # Falls back to Hugging Face model name if local path doesn't exist
+    local_model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", "splade-cocondenser-ensembledistil")
+    hf_model_name = "naver/splade-cocondenser-ensembledistil"
+    
+    if os.path.isdir(local_model_path):
+        splade_model = local_model_path
+        logger.info(f"Initializing SPLADE model from local path: {local_model_path}")
+    else:
+        splade_model = hf_model_name
+        logger.info(f"Initializing SPLADE model from Hugging Face: {hf_model_name}")
+    
     _splade = pyt_splade.Splade(
-        model="naver/splade-cocondenser-ensembledistil",
+        model=splade_model,
         device=device,
         max_length=256
     )
