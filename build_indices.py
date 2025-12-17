@@ -84,7 +84,7 @@ def build_bm25_index(data_dir: str, dataset, logger: logging.Logger, force: bool
     return index_dir
 
 
-def build_splade_index(data_dir: str, dataset, logger: logging.Logger, device: str, force: bool = False):
+def build_splade_index(data_dir: str, dataset, logger: logging.Logger, device: str, force: bool = False, batch_size: int = 256):
     """Build SPLADE index for the dataset."""
     index_dir = os.path.join(data_dir, "robust04_splade_index")
     
@@ -115,6 +115,7 @@ def build_splade_index(data_dir: str, dataset, logger: logging.Logger, device: s
         logger.info(f"Using Hugging Face SPLADE model: {hf_model_name}")
     
     logger.info(f"Initializing SPLADE on device: {device}")
+    logger.info(f"Using batch size: {batch_size}")
     splade = pyt_splade.Splade(
         model=splade_model,
         device=device,
@@ -124,7 +125,8 @@ def build_splade_index(data_dir: str, dataset, logger: logging.Logger, device: s
     start_time = datetime.now()
     
     # Build SPLADE index using doc encoder pipeline
-    splade_indexer = splade.doc_encoder() >> pt.IterDictIndexer(index_dir)
+    # batch_size controls GPU throughput - higher = faster but more VRAM
+    splade_indexer = splade.doc_encoder(batch_size=batch_size, verbose=True) >> pt.IterDictIndexer(index_dir)
     index_ref = splade_indexer.index(custom_corpus_iter(dataset))
     
     elapsed = datetime.now() - start_time
@@ -167,6 +169,12 @@ def main():
         default=None,
         help="Device for SPLADE (cuda/mps/cpu, auto-detected if not specified)"
     )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=256,
+        help="Batch size for SPLADE encoding (default: 256, increase for faster indexing)"
+    )
     
     args = parser.parse_args()
     
@@ -205,7 +213,7 @@ def main():
     
     if build_splade:
         logger.info("-" * 40)
-        splade_dir = build_splade_index(data_dir, dataset, logger, device, force=args.force)
+        splade_dir = build_splade_index(data_dir, dataset, logger, device, force=args.force, batch_size=args.batch_size)
     
     logger.info("=" * 60)
     logger.info("Index building complete!")
