@@ -2,8 +2,8 @@
 #SBATCH --partition=csedu
 #SBATCH --account=csedui00041
 #SBATCH --gres=gpu:0
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=30G
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=50G
 #SBATCH --time=2:00:00
 #SBATCH --exclude=cn47,cn48
 #SBATCH --output=logs/build_bm25_%j.out
