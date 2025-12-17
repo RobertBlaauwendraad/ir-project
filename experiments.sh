@@ -3,7 +3,7 @@
 #SBATCH --account=csedui00041
 #SBATCH --gres=gpu:1
 ##SBATCH --time=24:00:00
-##SBATCH --mem=32G
+#SBATCH --mem=16G
 #SBATCH --output=logs/experiments_%j.out
 #SBATCH --error=logs/experiments_%j.err
 
