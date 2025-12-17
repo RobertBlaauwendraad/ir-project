@@ -120,7 +120,7 @@ def build_bm25_index(data_dir: str, dataset, logger: logging.Logger, index_prefi
     
     start_time = datetime.now()
     
-    indexer = pt.IterDictIndexer(index_dir)
+    indexer = pt.IterDictIndexer(index_dir, meta={'docno': 256, 'text': 4096})
     index_ref = indexer.index(custom_corpus_iter(dataset, text_fields))
     
     elapsed = datetime.now() - start_time
@@ -172,7 +172,7 @@ def build_splade_index(data_dir: str, dataset, logger: logging.Logger, device: s
     
     # Build SPLADE index using doc encoder pipeline
     # batch_size controls GPU throughput - higher = faster but more VRAM
-    splade_indexer = splade.doc_encoder(batch_size=batch_size, verbose=True) >> pt.IterDictIndexer(index_dir)
+    splade_indexer = splade.doc_encoder(batch_size=batch_size, verbose=True) >> pt.IterDictIndexer(index_dir, meta={'docno': 256, 'text': 4096})
     index_ref = splade_indexer.index(custom_corpus_iter(dataset, text_fields))
     
     elapsed = datetime.now() - start_time
