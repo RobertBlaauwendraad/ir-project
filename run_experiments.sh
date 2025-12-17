@@ -4,8 +4,8 @@
 #SBATCH --gres=gpu:1
 ##SBATCH --time=24:00:00
 #SBATCH --mem=16G
-#SBATCH --output=logs/experiments_%j.out
-#SBATCH --error=logs/experiments_%j.err
+#SBATCH --output=logs/run_experiments_%j.out
+#SBATCH --error=logs/run_experiments_%j.err
 
 # IR Experiments Runner
 # Usage:

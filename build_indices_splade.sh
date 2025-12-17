@@ -3,19 +3,17 @@
 #SBATCH --account=csedui00041
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=6
-#SBATCH --time=6:00:00
 #SBATCH --mem=15G
-#SBATCH --output=logs/build_indices_%j.out
-#SBATCH --error=logs/build_indices_%j.err
+#SBATCH --time=4:00:00
+#SBATCH --output=logs/build_splade_%j.out
+#SBATCH --error=logs/build_splade_%j.err
 
-# Index Builder for IR Project
-# This script builds the BM25 and SPLADE indices needed for experiments.
+# SPLADE Index Builder for IR Project (GPU nodes: cn47/cn48)
+# This script builds only the SPLADE index using GPU acceleration.
 #
 # Usage:
-#   sbatch build_indices.sh                    # Build all indices
-#   sbatch build_indices.sh --bm25-only        # Build only BM25 index
-#   sbatch build_indices.sh --splade-only      # Build only SPLADE index
-#   sbatch build_indices.sh --force            # Force rebuild existing indices
+#   sbatch build_indices_splade.sh                # Build SPLADE index
+#   sbatch build_indices_splade.sh --force        # Force rebuild existing index
 
 # Create logs directory if it doesn't exist
 mkdir -p logs
@@ -29,10 +27,12 @@ fi
 DATA_DIR="./data"
 
 echo "=============================================="
-echo "IR Project - Index Builder"
+echo "IR Project - SPLADE Index Builder (GPU)"
 echo "=============================================="
 echo "Job ID: $SLURM_JOB_ID"
 echo "Node: $SLURM_NODELIST"
+echo "GPUs: $SLURM_GPUS_ON_NODE"
+echo "CPUs: $SLURM_CPUS_PER_TASK"
 echo "Data directory: $DATA_DIR"
 echo "Arguments: $@"
 echo "=============================================="
@@ -41,9 +41,9 @@ echo "=============================================="
 export HF_HUB_OFFLINE=1
 export TRANSFORMERS_OFFLINE=1
 
-# Run the index builder
-python build_indices.py --data-dir "$DATA_DIR" "$@"
+# Run the SPLADE index builder with CUDA device
+python build_indices.py --data-dir "$DATA_DIR" --splade-only --device cuda "$@"
 
 echo "=============================================="
-echo "Index building complete!"
+echo "SPLADE index building complete!"
 echo "=============================================="
