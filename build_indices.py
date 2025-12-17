@@ -172,8 +172,8 @@ def main():
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=256,
-        help="Batch size for SPLADE encoding (default: 256, increase for faster indexing)"
+        default=64,
+        help="Batch size for SPLADE encoding (default: 64, increase if GPU has free VRAM)"
     )
     
     args = parser.parse_args()

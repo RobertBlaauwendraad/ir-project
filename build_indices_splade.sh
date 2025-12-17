@@ -41,6 +41,9 @@ echo "=============================================="
 export HF_HUB_OFFLINE=1
 export TRANSFORMERS_OFFLINE=1
 
+# Better CUDA memory management for shared GPUs
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+
 # Run the SPLADE index builder with CUDA device
 python build_indices.py --data-dir "$DATA_DIR" --splade-only --device cuda "$@"
 
