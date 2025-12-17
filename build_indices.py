@@ -152,6 +152,10 @@ def build_splade_index(data_dir: str, dataset, logger: logging.Logger, device: s
     script_dir = os.path.dirname(os.path.abspath(__file__))
     local_model_path = os.path.join(script_dir, "models", "splade-cocondenser-ensembledistil")
     hf_model_name = "naver/splade-cocondenser-ensembledistil"
+
+    gpu_count = torch.cuda.device_count()
+    if gpu_count > 1:
+        batch_size *= gpu_count
     
     if os.path.isdir(local_model_path):
         splade_model = local_model_path
@@ -167,13 +171,16 @@ def build_splade_index(data_dir: str, dataset, logger: logging.Logger, device: s
         device=device,
         max_length=256
     )
+
+    if gpu_count > 1:
+        splade.model = torch.nn.DataParallel(splade.model)
     
     start_time = datetime.now()
     
     # Build SPLADE index using doc encoder pipeline
     # batch_size controls GPU throughput - higher = faster but more VRAM
     splade_indexer = splade.doc_encoder(batch_size=batch_size, verbose=True) >> pt.IterDictIndexer(index_dir, meta={'docno': 256, 'text': 4096})
-    index_ref = splade_indexer.index(custom_corpus_iter(dataset, text_fields))
+    index_ref = splade_indexer.index(custom_corpus_iter(dataset, text_fields), batch_size=batch_size)
     
     elapsed = datetime.now() - start_time
     logger.info(f"SPLADE index built successfully in {elapsed}")
