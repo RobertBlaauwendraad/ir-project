@@ -56,13 +56,13 @@ for shard_path in valid_shards:
     
     retr = (
         splade.query_encoder()
-        >> pt.BatchRetrieve(shard_path, wmodel="Tf")
+        >> pt.terrier.Retriever(shard_path, wmodel="Tf")
     )
     
     splade_retrievers.append(retr)
 
 logger.info(f"Found {len(valid_shards)} valid shards. Combining retrievers...")
-splade_retr = pt.CombSum(*splade_retrievers)
+splade_retr = pt._ops.CombSum(*splade_retrievers)
 
 
 logger.info("Loading OWI Dataset...")
