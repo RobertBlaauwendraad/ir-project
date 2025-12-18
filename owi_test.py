@@ -36,9 +36,7 @@ valid_shards = [p for p in shard_candidates if os.path.exists(os.path.join(p, "d
 if not valid_shards:
     logger.error("No valid shards found! Did the indexing job finish?")
     sys.exit(1)
-
-logger.info(f"Found {len(valid_shards)} valid shards. Loading MultiIndex...")
-index_ref = pt.MultiIndex([pt.IndexFactory.of(p) for p in valid_shards])
+   
 
 logger.info("Initializing SPLADE Model...")
 # Use the HuggingFace ID directly
@@ -50,14 +48,26 @@ splade = pyt_splade.Splade(
         device=device,
         max_length=256
     )
+    
+splade_retrievers = []
+
+for shard_path in valid_shards:
+    logger.info(f"Loading shard: {shard_path}")
+    
+    retr = (
+        splade.query_encoder()
+        >> pt.BatchRetrieve(shard_path, wmodel="Tf")
+    )
+    
+    splade_retrievers.append(retr)
+
+logger.info(f"Found {len(valid_shards)} valid shards. Combining retrievers...")
+splade_retr = pt.CombSum(*splade_retrievers)
+
 
 logger.info("Loading OWI Dataset...")
 ir_datasets_owi.register() 
 dataset = pt.get_dataset("irds:owi/dev")
-
-
-splade_retr = splade.query_encoder() >> pt.BatchRetrieve(index_ref, wmodel="Tf")
-
 
 logger.info("Starting Experiment...")
 
