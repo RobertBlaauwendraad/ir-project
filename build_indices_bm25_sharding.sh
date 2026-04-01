@@ -2,19 +2,23 @@
 #SBATCH --partition=csedu
 #SBATCH --account=csedui00041
 #SBATCH --gres=gpu:0
-#SBATCH --cpus-per-task=12
+#SBATCH --cpus-per-task=8
 #SBATCH --mem=15G
-#SBATCH --time=23:00:00
+#SBATCH --time=12:00:00
 #SBATCH --exclude=cn47,cn48
-#SBATCH --output=logs/build_bm25_%j.out
-#SBATCH --error=logs/build_bm25_%j.err
+#SBATCH --array=0-29
+#SBATCH --output=logs/%j_shard_%a.out
+#SBATCH --error=logs/%j_shard_%a.err
 
-# BM25 Index Builder for IR Project (CPU nodes: cn77/cn78)
-# This script builds only the BM25 index using CPU-only nodes.
+# BM25 Index Builder for IR Project (GPU nodes: cn47/cn48)
+# This script builds only the BM25 index.
 #
 # Usage:
-#   sbatch build_indices_bm25.sh                # Build BM25 index
-#   sbatch build_indices_bm25.sh --force        # Force rebuild existing index
+#   sbatch build_indices_bm25_sharding.sh                # Build BM25 index
+#   sbatch build_indices_bm25_sharding.sh	         # Force rebuild existing index
+
+# Total number of shards (Has to match array size)
+NUM_SHARDS=30
 
 # Create logs directory if it doesn't exist
 mkdir -p logs
@@ -38,8 +42,8 @@ echo "Arguments: $@"
 echo "=============================================="
 
 # Run the BM25 index builder (CPU only)
-python build_indices.py --data-dir "$DATA_DIR" --bm25-only --device cpu "$@"
+python build_indices_sharding.py --data-dir "$DATA_DIR" --bm25-only --shard-id $SLURM_ARRAY_TASK_ID --num-shards $NUM_SHARDS "$@" --threads 8 --force --dataset owi
 
 echo "=============================================="
-echo "BM25 index building complete!"
+echo "SPLADE index building complete!"
 echo "=============================================="

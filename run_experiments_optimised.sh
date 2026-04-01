@@ -2,7 +2,7 @@
 #SBATCH --partition=csedu
 #SBATCH --account=csedui00041
 #SBATCH --gres=gpu:1
-#SBATCH --time=24:00:00
+#SBATCH --time=12:00:00
 #SBATCH --mem=16G
 #SBATCH --output=logs/run_experiments_%j.out
 #SBATCH --error=logs/run_experiments_%j.err
@@ -21,16 +21,12 @@
 #   sbatch run_experiments.sh --exp 1-5                    # Run experiment range
 #   sbatch run_experiments.sh --dataset owi --exp 1-5      # Run experiments 1-5 on OWI
 
-# Create logs directory if it doesn't exist
 mkdir -p logs
 
-# Activate virtual environment if it exists
 if [ -d ".venv" ]; then
     source .venv/bin/activate
 fi
 
-# Data directory - uses the symlink to the shared storage
 DATA_DIR="./data"
 
-# Run experiments - pass all arguments to Python script
-python run_experiments.py --data-dir "$DATA_DIR" --output-dir ./experiment_results "$@"
+python run_experiments_optimised.py --data-dir "$DATA_DIR" --output-dir ./experiment_results --device cuda "$@"1~python run_experiments.py --data-dir "$DATA_DIR" --output-dir ./experiment_results --device cuda "$@"1~python run_experiments.py --data-dir "$DATA_DIR" --output-dir ./experiment_results --device cuda "$@"

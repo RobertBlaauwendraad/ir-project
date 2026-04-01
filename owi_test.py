@@ -8,6 +8,9 @@ import pyt_splade
 import torch
 import ir_datasets_owi
 
+from functools import reduce
+import operator
+
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 logger = logging.getLogger()
@@ -49,21 +52,19 @@ splade = pyt_splade.Splade(
         max_length=256
     )
     
-splade_retrievers = []
+splade_encoder = splade.query_encoder()
+
+shard_retrievers = []
+logger.info(f"Found {len(valid_shards)} valid shards. Creating retrievers...")
 
 for shard_path in valid_shards:
-    logger.info(f"Loading shard: {shard_path}")
-    
-    retr = (
-        splade.query_encoder()
-        >> pt.terrier.Retriever(shard_path, wmodel="Tf")
-    )
-    
-    splade_retrievers.append(retr)
+    retr = pt.terrier.Retriever(shard_path, wmodel="Tf")
+    shard_retrievers.append(retr)
 
-logger.info(f"Found {len(valid_shards)} valid shards. Combining retrievers...")
-splade_retr = pt._ops.CombSum(*splade_retrievers)
+logger.info("Combining shards...")
+combined_shards = reduce(operator.add, shard_retrievers)
 
+splade_retr = splade_encoder >> combined_shards
 
 logger.info("Loading OWI Dataset...")
 ir_datasets_owi.register() 

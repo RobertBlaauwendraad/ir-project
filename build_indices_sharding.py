@@ -110,11 +110,16 @@ def custom_corpus_iter(dataset, text_fields=None, shard_id=0, num_shards=1):
             'text': ' '.join(text_parts).strip()
         }
 
-
-def build_bm25_index(data_dir: str, dataset, logger: logging.Logger, index_prefix: str = "robust04", text_fields: list = None, force: bool = False):
-    """Build BM25 index for the dataset."""
-    index_dir = os.path.join(data_dir, f"{index_prefix}_bm25_index")
+def build_bm25_index(data_dir: str, dataset, logger: logging.Logger, index_prefix: str = "robust04", 
+                     text_fields: list = None, force: bool = False, shard_id=0, num_shards=1, threads=8):
+    """Build BM25 index for the dataset with sharding."""
+    base_index_dir = os.path.join(data_dir, f"{index_prefix}_bm25_index")
     
+    if num_shards > 1:
+        index_dir = os.path.join(base_index_dir, f"part_{shard_id}")
+    else:
+        index_dir = base_index_dir
+        
     if os.path.exists(index_dir) and not force:
         logger.info(f"BM25 index already exists at {index_dir}")
         logger.info("Use --force to rebuild")
@@ -122,23 +127,27 @@ def build_bm25_index(data_dir: str, dataset, logger: logging.Logger, index_prefi
     
     if os.path.exists(index_dir) and force:
         logger.info(f"Removing existing BM25 index at {index_dir}")
-        import shutil
         shutil.rmtree(index_dir)
     
-    logger.info(f"Building BM25 index at {index_dir}...")
+    logger.info(f"Building BM25 index at {index_dir} (Shard {shard_id}/{num_shards})...")
     logger.info("This may take a while...")
     
     start_time = datetime.now()
     
-    indexer = pt.IterDictIndexer(index_dir, meta={'docno': 256, 'text': 4096})
-    index_ref = indexer.index(custom_corpus_iter(dataset, text_fields))
+    indexer = pt.IterDictIndexer(
+        index_dir, 
+        meta={'docno': 256, 'text':4096}, 
+        threads=threads
+    )
+    
+    # Passed shard_id and num_shards down to the iterator
+    index_ref = indexer.index(custom_corpus_iter(dataset, text_fields, shard_id, num_shards))
     
     elapsed = datetime.now() - start_time
     logger.info(f"BM25 index built successfully in {elapsed}")
     logger.info(f"Index location: {index_dir}")
     
     return index_dir
-
 
 def build_splade_index(data_dir: str, dataset, logger: logging.Logger, device: str, index_prefix: str = "robust04", text_fields: list = None, force: bool = False, batch_size: int = 256, shard_id=0, num_shards=1):
     """Build SPLADE index for the dataset."""
@@ -183,8 +192,7 @@ def build_splade_index(data_dir: str, dataset, logger: logging.Logger, device: s
     start_time = datetime.now()
     
     # Build SPLADE index using doc encoder pipeline
-    # batch_size controls GPU throughput - higher = faster but more VRAM
-    splade_indexer = splade.doc_encoder(batch_size=batch_size, verbose=True) >> pt.IterDictIndexer(index_dir, meta={'docno': 256, 'text': 4096})
+    splade_indexer = splade.doc_encoder(batch_size=batch_size, verbose=True) >> pt.IterDictIndexer(index_dir, meta={'docno': 256}, pretokenised=True)
     index_ref = splade_indexer.index(custom_corpus_iter(dataset, text_fields, shard_id, num_shards))
     
     elapsed = datetime.now() - start_time
@@ -253,6 +261,13 @@ def main():
         default=1, 
         help="Total number of shards"
     )
+
+    parser.add_argument(
+        "--threads",
+	type=int,
+	default=8,
+	help="Number of CPU threads to use for BM25 indexing"
+    )
     
     args = parser.parse_args()
     
@@ -298,7 +313,7 @@ def main():
     # Build indices
     if build_bm25:
         logger.info("-" * 40)
-        bm25_dir = build_bm25_index(data_dir, dataset, logger, index_prefix=index_prefix, text_fields=text_fields, force=args.force)
+        bm25_dir = build_bm25_index(data_dir, dataset, logger, index_prefix=index_prefix, text_fields=text_fields, force=args.force, shard_id=args.shard_id, num_shards=args.num_shards, threads=args.threads)
     
     if build_splade:
         logger.info("-" * 40)

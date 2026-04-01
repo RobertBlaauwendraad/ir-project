@@ -19,6 +19,7 @@ import sys
 import warnings
 from datetime import datetime
 from typing import List, Optional
+from functools import reduce
 
 import ir_datasets
 import numpy as np
@@ -119,6 +120,20 @@ def save_results(results: pd.DataFrame, name: str, output_dir: str, logger: logg
     logger.info(f"Results saved to: {filename}")
 
 
+def load_sharded_index(index_dir: str, logger: logging.Logger):
+    """Load a sharded index, returning list of index refs or single ref."""
+    shard_candidates = [os.path.join(index_dir, f"part_{i}") for i in range(50)]
+    valid_shards = [p for p in shard_candidates if os.path.exists(os.path.join(p, "data.properties"))]
+    
+    if valid_shards:
+        logger.info(f"Found {len(valid_shards)} shards in {index_dir}")
+        return valid_shards, True
+    elif os.path.exists(os.path.join(index_dir, "data.properties")):
+        logger.info(f"Found single index at {index_dir}")
+        return [index_dir], False
+    else:
+        raise FileNotFoundError(f"No valid index found at {index_dir}")
+
 def setup_environment(logger: logging.Logger, device: str, data_dir: str = "./data", dataset_name: str = "robust04"):
     """Initialize PyTerrier, models, and indices."""
     global _dataset, _splade, _splade_retr, _bm25_retr
@@ -129,63 +144,74 @@ def setup_environment(logger: logging.Logger, device: str, data_dir: str = "./da
     logger.info(f"Dataset: {dataset_name}")
     torch.manual_seed(26)
     
-    # Get dataset configuration
     dataset_config = DATASET_CONFIGS[dataset_name]
     index_prefix = dataset_config["index_prefix"]
     irds_id = dataset_config["irds_id"]
     query_field = dataset_config["query_field"]
     
-    # Register OWI dataset if needed
     if dataset_name.startswith("owi"):
         logger.info("Registering OWI dataset...")
         ir_datasets_owi.register()
     
     # Initialize SPLADE
-    # Check for local model path first (for cluster without internet access)
-    # Falls back to Hugging Face model name if local path doesn't exist
     local_model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", "splade-cocondenser-ensembledistil")
     hf_model_name = "naver/splade-cocondenser-ensembledistil"
-    
-    if os.path.isdir(local_model_path):
-        splade_model = local_model_path
-        logger.info(f"Initializing SPLADE model from local path: {local_model_path}")
-    else:
-        splade_model = hf_model_name
-        logger.info(f"Initializing SPLADE model from Hugging Face: {hf_model_name}")
-    
-    _splade = pyt_splade.Splade(
-        model=splade_model,
-        device=device,
-        max_length=256
-    )
+    splade_model = local_model_path if os.path.isdir(local_model_path) else hf_model_name
+    logger.info(f"Initializing SPLADE model from: {splade_model}")
+    _splade = pyt_splade.Splade(model=splade_model, device=device, max_length=256)
     
     # Load dataset
     logger.info(f"Loading dataset: {dataset_name} (irds:{irds_id})...")
     _dataset = pt.get_dataset(f"irds:{irds_id}")
     
-    # Load indices from data directory
     data_dir = os.path.abspath(data_dir)
     bm25_index_dir = os.path.join(data_dir, f"{index_prefix}_bm25_index")
     splade_index_dir = os.path.join(data_dir, f"{index_prefix}_splade_index")
     
+    # Load BM25 index (sharded or single)
     logger.info(f"Loading BM25 index from {bm25_index_dir}...")
-    _bm25_index_ref = pt.IndexFactory.of(bm25_index_dir)
+    bm25_shard_paths, bm25_is_sharded = load_sharded_index(bm25_index_dir, logger)
+    if bm25_is_sharded:
+        bm25_shards = [pt.IndexFactory.of(p) for p in bm25_shard_paths]
+        _bm25_index_ref = bm25_shards[0]  # Keep first for query expansion (RM3/Bo1 need a single index ref)
+        _bm25_retr = reduce(lambda a, b: a + b, [
+            pt.terrier.Retriever(shard, wmodel="BM25") for shard in bm25_shards
+        ])
+        logger.info(f"BM25: combined {len(bm25_shards)} shards")
+    else:
+        _bm25_index_ref = pt.IndexFactory.of(bm25_shard_paths[0])
+        _bm25_retr = pt.terrier.Retriever(_bm25_index_ref, wmodel="BM25")
+        logger.info("BM25: single index loaded")
     
+    # Load SPLADE index (sharded or single)
     logger.info(f"Loading SPLADE index from {splade_index_dir}...")
-    _splade_index_ref = pt.IndexFactory.of(splade_index_dir)
-    
-    # Create retrievers
-    logger.info("Creating retrievers...")
-    _splade_retr = _splade.query_encoder() >> pt.terrier.Retriever(_splade_index_ref, wmodel="Tf")
-    _bm25_retr = pt.terrier.Retriever(_bm25_index_ref, wmodel="BM25")
+    splade_shard_paths, splade_is_sharded = load_sharded_index(splade_index_dir, logger)
+    if splade_is_sharded:
+        _splade_index_ref = pt.IndexFactory.of(splade_shard_paths[0])
+        _splade_retr = reduce(lambda a, b: a + b, [
+            _splade.query_encoder() >> pt.terrier.Retriever(p, wmodel="Tf")
+            for p in splade_shard_paths
+        ])
+        logger.info(f"SPLADE: combined {len(splade_shard_paths)} shards")
+    else:
+        _splade_index_ref = pt.IndexFactory.of(splade_shard_paths[0])
+        _splade_retr = _splade.query_encoder() >> pt.terrier.Retriever(_splade_index_ref, wmodel="Tf")
+        logger.info("SPLADE: single index loaded")
     
     # Prepare topics and qrels
     _topics = _dataset.get_topics()
-    _topics["query"] = _topics[query_field]
+    if "query" not in _topics.columns:
+        if query_field in _topics.columns:
+            _topics["query"] = _topics[query_field]
+        elif "text" in _topics.columns:
+            _topics["query"] = _topics["text"]
+        elif "title" in _topics.columns:
+            _topics["query"] = _topics["title"]
+        else:
+            raise ValueError(f"Cannot find query column in topics. Available columns: {list(_topics.columns)}")
     _qrels = _dataset.get_qrels()
     
     logger.info("Environment setup complete!")
-
 
 # Experiment registry
 EXPERIMENTS = {}

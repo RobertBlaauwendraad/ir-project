@@ -1,10 +1,10 @@
 #!/bin/bash
 #SBATCH --partition=csedu
 #SBATCH --account=csedui00041
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:2
 #SBATCH --cpus-per-task=6
 #SBATCH --mem=15G
-#SBATCH --time=4:00:00
+#SBATCH --time=60:00:00
 #SBATCH --output=logs/build_splade_%j.out
 #SBATCH --error=logs/build_splade_%j.err
 
