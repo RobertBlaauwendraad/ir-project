@@ -921,6 +921,200 @@ def exp19_weighted_fusion(logger, output_dir):
     return results
 
 
+@register_experiment(21, "5-Fold Cross-Validation (BM25, RM3, Hybrid Weight)")
+def exp21_cross_validation(logger, output_dir):
+    """
+    5-fold cross-validation over Robust04 topics to validate that hyperparameters
+    (BM25 k1/b, RM3 params, hybrid weight) were not overfit to the test qrels.
+
+    For each fold:
+      - train topics (~200): used to select best hyperparameters via grid search
+      - test topics  (~50):  used to evaluate the selected configuration
+
+    Reported metrics are averaged across the 5 held-out test folds.
+    This experiment is only meaningful for the robust04 dataset (249 topics with qrels).
+    """
+    import itertools
+
+    logger.info("Running Experiment 21: 5-Fold Cross-Validation")
+
+    # --- collect all topic ids that have at least one qrel ---
+    judged_qids = set(_qrels["qid"].unique())
+    topic_ids = [qid for qid in _topics["qid"].tolist() if qid in judged_qids]
+    topic_ids = sorted(set(topic_ids))
+
+    rng = np.random.default_rng(42)
+    topic_ids_arr = np.array(topic_ids)
+    rng.shuffle(topic_ids_arr)
+
+    n_folds = 5
+    folds = np.array_split(topic_ids_arr, n_folds)
+    logger.info(f"Total judged topics: {len(topic_ids_arr)}, "
+                f"fold sizes: {[len(f) for f in folds]}")
+
+    # Pre-retrieve full result sets once (cached) — CV just filters these
+    sp_full  = splade_results(logger)
+    rm3_full = bm25_rm3_results(logger)
+
+    # Grids to search on train folds
+    bm25_grid = [
+        {"k1": 1.2, "b": 0.75},
+        {"k1": 0.9, "b": 0.4},
+        {"k1": 1.5, "b": 0.75},
+        {"k1": 1.2, "b": 0.5},
+        {"k1": 2.0, "b": 0.75},
+        {"k1": 1.2, "b": 0.9},
+        {"k1": 0.8, "b": 0.4},
+        {"k1": 1.0, "b": 0.4},
+    ]
+    rm3_grid = [
+        {"fb_docs": 10, "fb_terms": 15, "fb_lambda": 0.5},
+        {"fb_docs": 15, "fb_terms": 20, "fb_lambda": 0.5},
+        {"fb_docs": 10, "fb_terms": 25, "fb_lambda": 0.5},
+        {"fb_docs": 20, "fb_terms": 15, "fb_lambda": 0.5},
+        {"fb_docs": 10, "fb_terms": 15, "fb_lambda": 0.4},
+        {"fb_docs": 10, "fb_terms": 15, "fb_lambda": 0.6},
+        {"fb_docs":  5, "fb_terms": 10, "fb_lambda": 0.5},
+    ]
+    weight_grid = [5, 10, 15, 20, 25, 30, 40, 50]
+
+    def _eval_on_topics(res: pd.DataFrame, topic_ids_set: set, qrels: pd.DataFrame) -> float:
+        """Return MAP for a result DataFrame restricted to a topic subset."""
+        res_sub   = res[res["qid"].isin(topic_ids_set)].copy()
+        qrels_sub = qrels[qrels["qid"].isin(topic_ids_set)].copy()
+        if res_sub.empty or qrels_sub.empty:
+            return 0.0
+        try:
+            result = pt.Experiment(
+                [res_sub], res_sub[["qid", "query"]].drop_duplicates(), qrels_sub,
+                eval_metrics=[MAP],
+                names=["sys"],
+            )
+            return float(result["AP"].iloc[0])
+        except Exception:
+            return 0.0
+
+    def _retrieve_bm25_cfg(k1, b, topic_subset: pd.DataFrame) -> pd.DataFrame:
+        key = f"bm25_k{k1}_b{b}".replace(".", "p")
+        full = get_cached(key, lambda k1=k1, b=b: pt.terrier.Retriever(
+            _bm25_index_ref, wmodel="BM25",
+            controls={"bm25.k_1": k1, "bm25.b": b},
+        ).transform(_topics), logger)
+        return full[full["qid"].isin(set(topic_subset["qid"]))]
+
+    def _retrieve_rm3_cfg(fb_docs, fb_terms, fb_lambda, topic_subset: pd.DataFrame) -> pd.DataFrame:
+        key = f"bm25_tuned_rm3_d{fb_docs}_t{fb_terms}_l{fb_lambda:.1f}".replace(".", "p")
+        bm25t = _make_bm25_tuned()
+        full = get_cached(key, lambda d=fb_docs, t=fb_terms, l=fb_lambda: (
+            _get_text_pipeline(bm25t)
+            >> pt.rewrite.RM3(_bm25_index_ref, fb_docs=d, fb_terms=t, fb_lambda=l)
+            >> bm25t
+        ).transform(_topics), logger)
+        return full[full["qid"].isin(set(topic_subset["qid"]))]
+
+    fold_metrics = []
+
+    for fold_idx in range(n_folds):
+        test_ids  = set(folds[fold_idx].tolist())
+        train_ids = set(itertools.chain.from_iterable(
+            folds[j].tolist() for j in range(n_folds) if j != fold_idx
+        ))
+
+        logger.info(f"Fold {fold_idx + 1}/{n_folds}: "
+                    f"train={len(train_ids)} topics, test={len(test_ids)} topics")
+
+        train_topics = _topics[_topics["qid"].isin(train_ids)].copy()
+        test_topics  = _topics[_topics["qid"].isin(test_ids)].copy()
+
+        # --- 1. Select best BM25 k1/b on train fold ---
+        best_bm25_map, best_k1, best_b = -1.0, 0.9, 0.4
+        for cfg in bm25_grid:
+            k1, b = cfg["k1"], cfg["b"]
+            bm25_sub = _retrieve_bm25_cfg(k1, b, train_topics)
+            # combine with SPLADE at fixed w=20 to tune jointly
+            sp_sub   = sp_full[sp_full["qid"].isin(train_ids)]
+            fused    = _fuse(sp_sub, bm25_sub, 1.0, 20.0)
+            m = _eval_on_topics(fused, train_ids, _qrels)
+            if m > best_bm25_map:
+                best_bm25_map, best_k1, best_b = m, k1, b
+        logger.info(f"  Best BM25: k1={best_k1}, b={best_b} (train MAP={best_bm25_map:.4f})")
+
+        # --- 2. Select best RM3 params on train fold (using best BM25) ---
+        best_rm3_map, best_d, best_t, best_l = -1.0, 10, 15, 0.5
+        for cfg in rm3_grid:
+            d, t, l = cfg["fb_docs"], cfg["fb_terms"], cfg["fb_lambda"]
+            rm3_sub  = _retrieve_rm3_cfg(d, t, l, train_topics)
+            sp_sub   = sp_full[sp_full["qid"].isin(train_ids)]
+            fused    = _fuse(sp_sub, rm3_sub, 1.0, 20.0)
+            m = _eval_on_topics(fused, train_ids, _qrels)
+            if m > best_rm3_map:
+                best_rm3_map, best_d, best_t, best_l = m, d, t, l
+        logger.info(f"  Best RM3: fb_docs={best_d}, fb_terms={best_t}, "
+                    f"fb_lambda={best_l} (train MAP={best_rm3_map:.4f})")
+
+        # --- 3. Select best hybrid weight on train fold ---
+        rm3_train = _retrieve_rm3_cfg(best_d, best_t, best_l, train_topics)
+        sp_train  = sp_full[sp_full["qid"].isin(train_ids)]
+        best_w_map, best_w = -1.0, 20.0
+        for w in weight_grid:
+            fused = _fuse(sp_train, rm3_train, 1.0, w)
+            m = _eval_on_topics(fused, train_ids, _qrels)
+            if m > best_w_map:
+                best_w_map, best_w = m, w
+        logger.info(f"  Best weight: w={best_w} (train MAP={best_w_map:.4f})")
+
+        # --- 4. Evaluate best config on held-out test fold ---
+        rm3_test = _retrieve_rm3_cfg(best_d, best_t, best_l, test_topics)
+        sp_test  = sp_full[sp_full["qid"].isin(test_ids)]
+        bm25_test = _retrieve_bm25_cfg(best_k1, best_b, test_topics)
+
+        best_fused = _fuse(sp_test, rm3_test, 1.0, float(best_w))
+
+        qrels_test = _qrels[_qrels["qid"].isin(test_ids)]
+        fold_result = pt.Experiment(
+            [sp_test, bm25_test, best_fused],
+            test_topics, qrels_test,
+            eval_metrics=[MAP, nDCG @ 10, Recall @ 100],
+            names=["SPLADE", "BM25 (tuned)", "Best Hybrid (CV)"],
+        )
+        logger.info(f"  Fold {fold_idx + 1} test results:\n{fold_result.to_string()}")
+        fold_result["fold"] = fold_idx + 1
+        fold_result["best_k1"] = best_k1
+        fold_result["best_b"] = best_b
+        fold_result["best_fb_docs"] = best_d
+        fold_result["best_fb_terms"] = best_t
+        fold_result["best_fb_lambda"] = best_l
+        fold_result["best_w"] = best_w
+        fold_metrics.append(fold_result)
+
+    # --- Aggregate across folds ---
+    all_folds_df = pd.concat(fold_metrics, ignore_index=True)
+    metric_cols = [c for c in all_folds_df.columns
+                   if c not in ("name", "fold", "best_k1", "best_b",
+                                "best_fb_docs", "best_fb_terms", "best_fb_lambda", "best_w")]
+    agg = (all_folds_df.groupby("name")[metric_cols]
+           .mean()
+           .reset_index()
+           .rename(columns={"name": "name"}))
+    agg["name"] = agg["name"] + " [5-fold CV avg]"
+
+    logger.info("\n" + "=" * 60)
+    logger.info("5-FOLD CROSS-VALIDATION SUMMARY (averaged across folds)")
+    logger.info("=" * 60)
+    logger.info(f"\n{agg.to_string(index=False)}")
+
+    # Also log per-fold hyperparameter choices
+    hp_summary = all_folds_df[all_folds_df["name"] == "Best Hybrid (CV)"][
+        ["fold", "best_k1", "best_b", "best_fb_docs", "best_fb_terms", "best_fb_lambda", "best_w"]
+    ]
+    logger.info("\nPer-fold best hyperparameters:")
+    logger.info(f"\n{hp_summary.to_string(index=False)}")
+
+    save_results(all_folds_df, "exp21_cv_per_fold", output_dir, logger)
+    save_results(agg, "exp21_cv_summary", output_dir, logger)
+    return agg
+
+
 @register_experiment(20, "Best Overall Model Evaluation")
 def exp20_best_overall(logger, output_dir):
     logger.info("Experiment 20: Best Overall Model Evaluation")

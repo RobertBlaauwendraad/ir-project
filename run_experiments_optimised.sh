@@ -23,10 +23,10 @@
 
 mkdir -p logs
 
-if [ -d ".venv" ]; then
-    source .venv/bin/activate
+if [ -d "venv" ]; then
+    source venv/bin/activate
 fi
 
 DATA_DIR="./data"
 
-python run_experiments_optimised.py --data-dir "$DATA_DIR" --output-dir ./experiment_results --device cuda "$@"1~python run_experiments.py --data-dir "$DATA_DIR" --output-dir ./experiment_results --device cuda "$@"1~python run_experiments.py --data-dir "$DATA_DIR" --output-dir ./experiment_results --device cuda "$@"
+python run_experiments_optimised.py --data-dir "$DATA_DIR" --output-dir ./experiment_results --device cuda "$@"

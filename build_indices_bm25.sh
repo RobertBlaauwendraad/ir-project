@@ -3,7 +3,7 @@
 #SBATCH --account=csedui00041
 #SBATCH --gres=gpu:0
 #SBATCH --cpus-per-task=12
-#SBATCH --mem=15G
+#SBATCH --mem=30G
 #SBATCH --time=23:00:00
 #SBATCH --exclude=cn47,cn48
 #SBATCH --output=logs/build_bm25_%j.out
@@ -20,8 +20,8 @@
 mkdir -p logs
 
 # Activate virtual environment if it exists
-if [ -d ".venv" ]; then
-    source .venv/bin/activate
+if [ -d "venv" ]; then
+    source venv/bin/activate
 fi
 
 # Data directory - uses the symlink to the shared storage

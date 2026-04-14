@@ -44,12 +44,12 @@ DATASET_CONFIGS = {
     "owi": {
         "irds_id": "owi/dev",
         "index_prefix": "owi",
-        "text_fields": ["title", "main_content"],  # OWI document fields
+        "text_fields": ["title", "description", "main_content"],  # OWI document fields; description = meta description
     },
     "owi/subsampled": {
         "irds_id": "owi/subsampled/dev",
         "index_prefix": "owi_subsampled",
-        "text_fields": ["title", "main_content"],
+        "text_fields": ["title", "description", "main_content"],
     },
 }
 
