@@ -4,7 +4,8 @@
 #SBATCH --gres=gpu:0
 #SBATCH --cpus-per-task=12
 #SBATCH --mem=30G
-#SBATCH --time=23:00:00
+#SBATCH --time=12:00:00
+#SBATCH --qos=csedu-large
 #SBATCH --exclude=cn47,cn48
 #SBATCH --output=logs/build_bm25_%j.out
 #SBATCH --error=logs/build_bm25_%j.err
