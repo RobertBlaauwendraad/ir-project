@@ -23,8 +23,8 @@ NUM_SHARDS=30
 mkdir -p logs
 
 # Activate virtual environment if it exists
-if [ -d ".venv" ]; then
-    source .venv/bin/activate
+if [ -d "venv" ]; then
+    source venv/bin/activate
 fi
 
 # Data directory - uses the symlink to the shared storage
