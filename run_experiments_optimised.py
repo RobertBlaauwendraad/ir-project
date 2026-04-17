@@ -262,6 +262,10 @@ def setup_environment(logger: logging.Logger, device: str,
             return combined
 
         _bm25_retr = pt.apply.generic(retrieve_bm25_shards)
+        logger.info("BM25: sharded index loaded")
+    else:
+        # Non-sharded: single BM25 index
+        _bm25_retr = pt.terrier.Retriever(_bm25_index_ref, wmodel="BM25")
         logger.info("BM25: single index loaded")
 
     # SPLADE index
@@ -291,6 +295,14 @@ def setup_environment(logger: logging.Logger, device: str,
             return combined
 
         _splade_retr = pt.apply.generic(retrieve_splade_shards)
+        logger.info("SPLADE: sharded index loaded")
+    else:
+        # Non-sharded: single SPLADE index
+        query_encoder = _splade.query_encoder()
+        _splade_retr = (
+            query_encoder
+            >> pt.terrier.Retriever(_splade_index_ref, wmodel="Tf")
+        )
         logger.info("SPLADE: single index loaded")
 
     # Topics / qrels
