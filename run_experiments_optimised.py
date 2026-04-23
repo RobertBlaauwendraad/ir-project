@@ -627,12 +627,19 @@ def exp9_monot5_reranking(logger, output_dir):
     bm = bm25_results(logger)
     hybrid_20 = _fuse(sp, bm, 1.0, 20.0)
 
+    fields = _get_text_fields()
+
+    def get_body_text():
+        return (
+            pt.text.get_text(_dataset, fields)
+            >> pt.apply.text(lambda row, f=fields: _concat_text(row, f))
+        )
+
     def rerank(res, cutoff=100):
         top = res.groupby("qid").head(cutoff)
         return (
             top
-            >> pt.text.get_text(_dataset, ["title", "body"])
-            >> pt.apply.text(lambda row: (row["title"] or "") + " " + (row["body"] or ""))
+            >> get_body_text()
             >> mono_t5
         )
 
@@ -860,13 +867,20 @@ def exp18_double_expansion(logger, output_dir):
     rm3 = bm25_rm3_results(logger)
     bm25t = _make_bm25_tuned()
 
+    fields = _get_text_fields()
+
+    def get_body_text():
+        return (
+            pt.text.get_text(_dataset, fields)
+            >> pt.apply.text(lambda row, f=fields: _concat_text(row, f))
+        )
+
     # RM3 then Bo1
     rm3_then_bo1 = get_cached("bm25_tuned_rm3_then_bo1", lambda: (
         _get_text_pipeline(bm25t)
         >> pt.rewrite.RM3(_bm25_index_ref, fb_docs=10, fb_terms=15, fb_lambda=0.5)
         >> bm25t
-        >> pt.text.get_text(_dataset, ["title", "body"])
-        >> pt.apply.text(lambda row: (row["title"] or "") + " " + (row["body"] or ""))
+        >> get_body_text()
         >> pt.rewrite.Bo1QueryExpansion(_bm25_index_ref, fb_docs=3, fb_terms=5)
         >> bm25t
     ).transform(_topics), logger)
@@ -876,8 +890,7 @@ def exp18_double_expansion(logger, output_dir):
         _get_text_pipeline(bm25t)
         >> pt.rewrite.Bo1QueryExpansion(_bm25_index_ref, fb_docs=5, fb_terms=10)
         >> bm25t
-        >> pt.text.get_text(_dataset, ["title", "body"])
-        >> pt.apply.text(lambda row: (row["title"] or "") + " " + (row["body"] or ""))
+        >> get_body_text()
         >> pt.rewrite.RM3(_bm25_index_ref, fb_docs=10, fb_terms=10, fb_lambda=0.5)
         >> bm25t
     ).transform(_topics), logger)
