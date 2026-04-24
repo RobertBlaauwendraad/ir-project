@@ -49,7 +49,7 @@ export TRANSFORMERS_OFFLINE=1
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 # Run the SPLADE index builder with CUDA device
-python build_indices_sharding.py --data-dir "$DATA_DIR" --splade-only --device cuda --shard-id $SLURM_ARRAY_TASK_ID --num-shards $NUM_SHARDS "$@"
+python build_indices_sharding.py --data-dir "$DATA_DIR" --splade-only --device cuda --shard-id $SLURM_ARRAY_TASK_ID --num-shards $NUM_SHARDS --dataset owi "$@"
 
 echo "=============================================="
 echo "SPLADE index building complete!"
